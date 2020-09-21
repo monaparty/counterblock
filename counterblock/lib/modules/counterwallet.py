@@ -30,6 +30,7 @@ from counterblock.lib.processor import startup
 PREFERENCES_MAX_LENGTH = 100000  # in bytes, as expressed in JSON
 ARMORY_UTXSVR_PORT_MAINNET = 6590
 ARMORY_UTXSVR_PORT_TESTNET = 6591
+ARMORY_UTXSVR_PORT_REGTEST = 6592
 
 FUZZY_MAX_WALLET_MESSAGES_STORED = 1000
 
@@ -54,7 +55,7 @@ def _read_config():
         module_config['ARMORY_UTXSVR_HOST'] = configfile.get('Default', 'armory-utxsvr-host')
     else:
         module_config['ARMORY_UTXSVR_HOST'] = "127.0.0.1"
-    
+
     # email-related
     if configfile.has_option('Default', 'support-email'):
         module_config['SUPPORT_EMAIL'] = configfile.get('Default', 'support-email')
@@ -91,15 +92,15 @@ def is_ready():
     ip = flask.request.headers.get('X-Real-Ip', flask.request.remote_addr)
     try:
         country = module_config['GEOIP'].city(ip).country.iso_code
-    except:
-        country = 'unknown'
-
+    except Exception:
+        country = "unknown"
     return {
         'caught_up': blockfeed.fuzzy_is_caught_up(),
         'last_message_index': config.state['last_message_index'],
         'cw_last_message_seq': config.state['cw_last_message_seq'],
         'block_height': config.state['cp_backend_block_index'],
         'testnet': config.TESTNET,
+        'regtest': config.REGTEST,
         'ip': ip,
         'country': country,
         'quote_assets': config.QUOTE_ASSETS,
@@ -129,10 +130,11 @@ def get_wallet_stats(start_ts=None, end_ts=None):
 
     num_wallets_mainnet = config.mongo_db.preferences.find({'network': 'mainnet'}).count()
     num_wallets_testnet = config.mongo_db.preferences.find({'network': 'testnet'}).count()
+    num_wallets_regtest = config.mongo_db.preferences.find({'network': 'regtest'}).count()
     num_wallets_unknown = config.mongo_db.preferences.find({'network': None}).count()
     wallet_stats = []
 
-    for net in ['mainnet', 'testnet']:
+    for net in ['mainnet', 'testnet', 'regtest']:
         filters = {
             "when": {
                 "$gte": datetime.datetime.utcfromtimestamp(start_ts)
@@ -163,6 +165,7 @@ def get_wallet_stats(start_ts=None, end_ts=None):
     return {
         'num_wallets_mainnet': num_wallets_mainnet,
         'num_wallets_testnet': num_wallets_testnet,
+        'num_wallets_regtest': num_wallets_regtest,
         'num_wallets_unknown': num_wallets_unknown,
         'wallet_stats': wallet_stats}
 
@@ -170,9 +173,9 @@ def get_wallet_stats(start_ts=None, end_ts=None):
 @API.add_method
 def get_preferences(wallet_id, for_login=False, network=None):
     """Gets stored wallet preferences
-    @param network: only required if for_login is specified. One of: 'mainnet' or 'testnet'
+    @param network: only required if for_login is specified. One of: 'mainnet', 'testnet' or 'regtest'
     """
-    if network not in (None, 'mainnet', 'testnet'):
+    if network not in (None, 'mainnet', 'testnet', 'regtest'):
         raise Exception("Invalid network parameter setting")
     if for_login and network is None:
         raise Exception("network parameter required if for_login is set")
@@ -201,9 +204,9 @@ def get_preferences(wallet_id, for_login=False, network=None):
 @API.add_method
 def store_preferences(wallet_id, preferences, for_login=False, network=None, referer=None):
     """Stores freeform wallet preferences
-    @param network: only required if for_login is specified. One of: 'mainnet' or 'testnet'
+    @param network: only required if for_login is specified. One of: 'mainnet', 'testnet' or 'regtest'
     """
-    if network not in (None, 'mainnet', 'testnet'):
+    if network not in (None, 'mainnet', 'testnet', 'regtest'):
         raise Exception("Invalid network parameter setting")
     if for_login and network is None:
         raise Exception("network parameter required if for_login is set")
@@ -248,8 +251,12 @@ def store_preferences(wallet_id, preferences, for_login=False, network=None, ref
 
 @API.add_method
 def create_armory_utx(unsigned_tx_hex, public_key_hex):
-    endpoint = "http://%s:%s/" % (module_config['ARMORY_UTXSVR_HOST'],
-        ARMORY_UTXSVR_PORT_MAINNET if not config.TESTNET else ARMORY_UTXSVR_PORT_TESTNET)
+    port = ARMORY_UTXSVR_PORT_MAINNET
+    if config.TESTNET:
+        port = ARMORY_UTXSVR_PORT_TESTNET
+    elif config.REGTEST:
+        port = ARMORY_UTXSVR_PORT_REGTEST
+    endpoint = "http://%s:%s/" % (module_config['ARMORY_UTXSVR_HOST'], port)
     params = {'unsigned_tx_hex': unsigned_tx_hex, 'public_key_hex': public_key_hex}
     utx_ascii = util.call_jsonrpc_api("serialize_unsigned_tx", params=params, endpoint=endpoint, abort_on_error=True)['result']
     return utx_ascii
@@ -257,8 +264,12 @@ def create_armory_utx(unsigned_tx_hex, public_key_hex):
 
 @API.add_method
 def convert_armory_signedtx_to_raw_hex(signed_tx_ascii):
-    endpoint = "http://%s:%s/" % (module_config['ARMORY_UTXSVR_HOST'],
-        ARMORY_UTXSVR_PORT_MAINNET if not config.TESTNET else ARMORY_UTXSVR_PORT_TESTNET)
+    port = ARMORY_UTXSVR_PORT_MAINNET
+    if config.TESTNET:
+        port = ARMORY_UTXSVR_PORT_TESTNET
+    elif config.REGTEST:
+        port = ARMORY_UTXSVR_PORT_REGTEST
+    endpoint = "http://%s:%s/" % (module_config['ARMORY_UTXSVR_HOST'], port)
     params = {'signed_tx_ascii': signed_tx_ascii}
     raw_tx_hex = util.call_jsonrpc_api("convert_signed_tx_to_raw_hex", params=params, endpoint=endpoint, abort_on_error=True)['result']
     return raw_tx_hex
@@ -353,7 +364,7 @@ def task_generate_wallet_stats():
     Every 30 minutes, from the login history, update and generate wallet stats
     """
     def gen_stats_for_network(network):
-        assert network in ('mainnet', 'testnet')
+        assert network in ('mainnet', 'testnet', 'regtest')
         # get the latest date in the stats table present
         now = datetime.datetime.utcnow()
         latest_stat = config.mongo_db.wallet_stats.find({'network': network}).sort('when', pymongo.DESCENDING).limit(1)
@@ -462,6 +473,7 @@ def task_generate_wallet_stats():
 
     gen_stats_for_network('mainnet')
     gen_stats_for_network('testnet')
+    gen_stats_for_network('regtest')
     start_task(task_generate_wallet_stats, delay=30 * 60)  # call again in 30 minutes
 
 
@@ -495,7 +507,11 @@ def store_wallet_message(msg, msg_data, decorate=True):
 @MessageProcessor.subscribe(priority=CORE_FIRST_PRIORITY - 0.5)
 def handle_invalid(msg, msg_data):
     # don't process invalid messages, but do forward them along to clients
-    status = msg_data.get('status', 'valid').lower()
+    pre_status = msg_data.get('status', 'valid')
+    if type(pre_status) == str:
+        status = msg_data.get('status', 'valid').lower()
+    else:
+        status = str(pre_status)
     if status.startswith('invalid'):
         if config.state['cp_latest_block_index'] - config.state['my_latest_block']['block_index'] < config.MAX_REORG_NUM_BLOCKS:
             # forward along via message feed, except while we're catching up
@@ -601,8 +617,17 @@ def init():
             util.subprocess_cmd(cmd)
         else:
             logger.info("{} database up to date. Not downloading.".format(mmdbName))
+<<<<<<< HEAD
     download_geoip_data()
     module_config['GEOIP'] = geoip2.database.Reader(geoip_data_path)
+=======
+
+    download_geoip_data()
+    try:
+        module_config['GEOIP'] = geoip2.database.Reader(geoip_data_path)
+    except FileNotFoundError as e:
+        logger.warn("GeoLite2-City.mmdb not found, download from https://maxmind.com/ the GeoLite2-City and put in {}".format(geoip_data_path))
+>>>>>>> upstream/develop
 
     if not module_config['SUPPORT_EMAIL']:
         logger.warn("Support email setting not set: To enable, please specify an email for the 'support-email' setting in your counterblockd.conf")

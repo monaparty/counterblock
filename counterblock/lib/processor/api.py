@@ -95,8 +95,8 @@ def serve_api():
             else:
                 # query bitcoind
                 fees = {}
-                fees['optimal'] = util.call_jsonrpc_api("fee_per_kb", {'nblocks': 3}, abort_on_error=True, use_cache=False)['result']
-                fees['low_priority'] = util.call_jsonrpc_api("fee_per_kb", {'nblocks': 8}, abort_on_error=True, use_cache=False)['result']
+                fees['optimal'] = util.call_jsonrpc_api("fee_per_kb", {'conf_target': 3}, abort_on_error=True, use_cache=False)['result']
+                fees['low_priority'] = util.call_jsonrpc_api("fee_per_kb", {'conf_target': 8}, abort_on_error=True, use_cache=False)['result']
             cache.set_value("FEE_PER_KB", fees, cache_period=60 * 5)  # cache for 5 minutes
         return fees
 
@@ -201,6 +201,25 @@ def serve_api():
                  'end_block': end_block,
                  }, abort_on_error=True)['result']
             #^ with filterop == 'or', we get all sends where this address was the source OR destination
+
+            address_dict['sweeps'] = util.call_jsonrpc_api(
+                "get_sweeps",
+                {'filters': [{'field': 'source', 'op': '==', 'value': address}, {'field': 'destination', 'op': '==', 'value': address}],
+                 'filterop': 'or',
+                 'order_by': 'block_index',
+                 'order_dir': 'asc',
+                 'start_block': start_block,
+                 'end_block': end_block,
+                 }, abort_on_error=True)['result']
+
+            address_dict['dispensers'] = util.call_jsonrpc_api(
+                "get_sweeps",
+                {'filters': [{'field': 'source', 'op': '==', 'value': address}],
+                 'order_by': 'block_index',
+                 'order_dir': 'asc',
+                 'start_block': start_block,
+                 'end_block': end_block,
+                 }, abort_on_error=True)['result']
 
             address_dict['orders'] = util.call_jsonrpc_api(
                 "get_orders",
