@@ -3,7 +3,7 @@
 ##
 # CONSTANTS
 ##
-VERSION = "1.4.0+MONA003"  # should keep up with counterblockd repo's release tag
+VERSION = "1.4.0+MONA004"  # should keep up with counterblockd repo's release tag
 
 DB_VERSION = 24  # a db version increment will cause counterblockd to rebuild its database off of counterpartyd
 
@@ -32,8 +32,8 @@ XCP_TO_BTC = XCP + '/' + BTC
 MAX_REORG_NUM_BLOCKS = 10  # max reorg we'd likely ever see
 MAX_FORCED_REORG_NUM_BLOCKS = 20  # but let us go deeper when messages are out of sync
 
-QUOTE_ASSETS = [BTC, XBTC, XCP, 'PEPECASH', 'BITCRYSTALS', 'FLDC', 'RUSTBITS', 'SCOTCOIN', 'DATABITS', 'BITCORN', 'MAFIACASH']  # define the priority for quote asset
-MARKET_LIST_QUOTE_ASSETS = [XCP, BTC]  # define the order in the market list
+QUOTE_ASSETS = [BTC, XBTC, XCP, 'SPACEMONA', 'MONANA']  # define the priority for quote asset
+MARKET_LIST_QUOTE_ASSETS = [XCP, XBTC, BTC]  # define the order in the market list
 
 DEFAULT_BACKEND_PORT_REGTEST = 29402
 DEFAULT_BACKEND_PORT_TESTNET = 19402
