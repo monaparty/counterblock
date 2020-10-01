@@ -32,7 +32,7 @@ XCP_TO_BTC = XCP + '/' + BTC
 MAX_REORG_NUM_BLOCKS = 10  # max reorg we'd likely ever see
 MAX_FORCED_REORG_NUM_BLOCKS = 20  # but let us go deeper when messages are out of sync
 
-QUOTE_ASSETS = [BTC, XBTC, XCP, 'SPACEMONA', 'MONANA']  # define the priority for quote asset
+QUOTE_ASSETS = [BTC, XBTC, XCP, 'SPACEMONA', 'MPYEN', 'MONANA']  # define the priority for quote asset
 MARKET_LIST_QUOTE_ASSETS = [XCP, XBTC, BTC]  # define the order in the market list
 
 DEFAULT_BACKEND_PORT_REGTEST = 29402
