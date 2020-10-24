@@ -277,7 +277,7 @@ def get_assets_info(assetsList):
                 'asset_longname': None,
                 'owner': None,
                 'divisible': True,
-                'listed': True,
+                'listed': (asset == config.XCP),
                 'reassignable': True,
                 'vendable': (asset == config.XCP),
                 'locked': False,
@@ -723,6 +723,9 @@ def process_rollback(max_block_index):
                 'asset_longname': None,
                 'owner': None,
                 'divisible': True,
+                'listed': (asset == config.XCP),
+                'reassignable': True,
+                'vendable': (asset == config.XCP),
                 'locked': False,
                 'total_issued': None,
                 '_at_block': config.BLOCK_FIRST,  # the block ID this asset is current for
