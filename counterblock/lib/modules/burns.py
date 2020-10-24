@@ -12,7 +12,6 @@ def get_burns(address = None, block = None, offset = 0, limit = 500):
         limit = 500
     elif limit < 0:
         raise Exception('limit must be positive')
-    limit_query = ' limit {} offset {}'.format(str(limit), str(offset))
 
     if address != None and block != None:
         raise Exception('Canot set address and block at same time.')
@@ -20,10 +19,10 @@ def get_burns(address = None, block = None, offset = 0, limit = 500):
         raise Exception('address or block must be set.')
     target_query = 'source = "{}"'.format(address) if address != None else 'block_index = ' + str(block)
 
-    sql = ('select burns.*, blocks.block_time as timestamp from burns' +
-           ' inner join blocks on burns.block_index = blocks.block_index' +
-           ' and burns.{} order by block_index DESC {}').format(target_query, limit_query)
-    logger.error(sql)
+    sql = ('''select burns.*, blocks.block_time as timestamp from burns
+            inner join blocks on burns.block_index = blocks.block_index
+            and burns.{} order by block_index DESC limit {} offset {}'''
+          ).format(target_query, str(limit), str(offset))
 
     data_body = util.call_jsonrpc_api("sql", {"query": sql}, abort_on_error=True)["result"]
 
@@ -31,9 +30,7 @@ def get_burns(address = None, block = None, offset = 0, limit = 500):
         x['burned'] = '{:.8f}'.format(blockchain.normalize_quantity(x['burned'], True))
         x['earned'] = '{:.8f}'.format(blockchain.normalize_quantity(x['earned'], True))
 
-    sql = 'select count(tx_index) as total from burns where {} {}'.format(target_query, limit_query)
-    logger.error(sql)
-    total_count = util.call_jsonrpc_api("sql", {"query": sql}, abort_on_error=True)["result"][0]["total"]
-
-
-    return {"data": data_body, "total": total_count}
+    return {
+        "data": data_body,
+        "total": len(data_body)
+    }
