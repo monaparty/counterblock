@@ -500,7 +500,7 @@ def get_balance_history(asset, addresses, normalize=True, start_ts=None, end_ts=
     return results
 
 
-@MessageProcessor.subscribe(priority=ASSETS_PRIORITY_PARSE_ISSUANCE)
+@MessageProcessor.subscribe(name='parse_issuance', priority=ASSETS_PRIORITY_PARSE_ISSUANCE)
 def parse_issuance(msg, msg_data):
     if msg['category'] != 'issuances':
         return
@@ -616,7 +616,7 @@ def parse_issuance(msg, msg_data):
     return True
 
 
-@MessageProcessor.subscribe(priority=ASSETS_PRIORITY_BALANCE_CHANGE)  # must come after parse_issuance
+@MessageProcessor.subscribe(name='parse_balance_change', priority=ASSETS_PRIORITY_BALANCE_CHANGE)  # must come after parse_issuance
 def parse_balance_change(msg, msg_data):
     # track balance changes for each address
     bal_change = None
