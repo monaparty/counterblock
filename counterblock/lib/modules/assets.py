@@ -277,8 +277,9 @@ def get_assets_info(assetsList):
                 'asset_longname': None,
                 'owner': None,
                 'divisible': True,
-                'listed': True,
+                'listed': (asset == config.XCP),
                 'reassignable': True,
+                'vendable': (asset == config.XCP),
                 'locked': False,
                 'supply': supply,
                 'description': '',
@@ -297,6 +298,7 @@ def get_assets_info(assetsList):
             'divisible': tracked_asset['divisible'],
             'listed': tracked_asset['listed'],
             'reassignable': tracked_asset['reassignable'],
+            'vendable': tracked_asset['vendable'],
             'locked': tracked_asset['locked'],
             'supply': tracked_asset['total_issued'],
             'description': tracked_asset['description'],
@@ -404,6 +406,7 @@ def get_asset_history(asset, reverse=False):
                 'divisible': raw[i]['divisible'],
                 'listed': raw[i]['listed'],
                 'reassignable': raw[i]['reassignable'],
+                'vendable': raw[i]['vendable'],
                 'locked': raw[i]['locked'],
                 'total_issued': raw[i]['total_issued'],
                 'total_issued_normalized': raw[i]['total_issued_normalized'],
@@ -497,7 +500,7 @@ def get_balance_history(asset, addresses, normalize=True, start_ts=None, end_ts=
     return results
 
 
-@MessageProcessor.subscribe(priority=ASSETS_PRIORITY_PARSE_ISSUANCE)
+@MessageProcessor.subscribe(name='parse_issuance', priority=ASSETS_PRIORITY_PARSE_ISSUANCE)
 def parse_issuance(msg, msg_data):
     if msg['category'] != 'issuances':
         return
@@ -585,6 +588,7 @@ def parse_issuance(msg, msg_data):
                 'divisible': msg_data['divisible'],
                 'listed': msg_data['listed'],
                 'reassignable': msg_data['reassignable'],
+                'vendable': msg_data['vendable'],
                 'locked': False,
                 'total_issued': int(msg_data['quantity']),
                 'total_issued_normalized': blockchain.normalize_quantity(msg_data['quantity'], msg_data['divisible']),
@@ -612,7 +616,7 @@ def parse_issuance(msg, msg_data):
     return True
 
 
-@MessageProcessor.subscribe(priority=ASSETS_PRIORITY_BALANCE_CHANGE)  # must come after parse_issuance
+@MessageProcessor.subscribe(name='parse_balance_change', priority=ASSETS_PRIORITY_BALANCE_CHANGE)  # must come after parse_issuance
 def parse_balance_change(msg, msg_data):
     # track balance changes for each address
     bal_change = None
@@ -719,6 +723,9 @@ def process_rollback(max_block_index):
                 'asset_longname': None,
                 'owner': None,
                 'divisible': True,
+                'listed': (asset == config.XCP),
+                'reassignable': True,
+                'vendable': (asset == config.XCP),
                 'locked': False,
                 'total_issued': None,
                 '_at_block': config.BLOCK_FIRST,  # the block ID this asset is current for
