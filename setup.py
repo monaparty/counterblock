@@ -40,6 +40,7 @@ required_packages = [
     'prettytable==0.7.2',
     'python-dateutil==2.5.3',
     'flask==0.11.1',
+    'ipfsapi==0.4.4',
     'json-rpc==1.10.3',
     'pytest==2.9.2',
     'pycoin==0.77',
