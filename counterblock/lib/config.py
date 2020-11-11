@@ -195,6 +195,12 @@ def init_base(args):
     global COUNTERPARTY_AUTH
     COUNTERPARTY_AUTH = (COUNTERPARTY_USER, COUNTERPARTY_PASSWORD) if (COUNTERPARTY_USER and COUNTERPARTY_PASSWORD) else None
 
+    global IPFS_API_MULTIADDR
+    IPFS_API_MULTIADDR = args.ipfs_api_multiaddr
+
+    global IPFS_ALLOW_PIN
+    IPFS_ALLOW_PIN = args.ipfs_allow_pin
+
     # mongodb
     global MONGODB_CONNECT
     if args.mongodb_connect:

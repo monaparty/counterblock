@@ -21,7 +21,7 @@ import calendar
 import dateutil.parser
 
 from counterblock.lib import config, util, blockfeed, blockchain
-from counterblock.lib.modules import ASSETS_PRIORITY_PARSE_ISSUANCE, ASSETS_PRIORITY_BALANCE_CHANGE
+from counterblock.lib.modules import ASSETS_PRIORITY_PARSE_ISSUANCE, ASSETS_PRIORITY_BALANCE_CHANGE, ipfs
 from counterblock.lib.processor import MessageProcessor, MempoolMessageProcessor, BlockProcessor, StartUpProcessor, CaughtUpProcessor, RollbackProcessor, API, start_task
 
 ASSET_MAX_RETRY = 3
@@ -87,8 +87,7 @@ def task_compile_extended_asset_info():
         for asset in assets:
             logger.debug("Looking at asset %s: %s" % (asset, asset['info_url']))
             if asset['info_url']:
-                info_url = ('http://' + asset['info_url']) \
-                    if not asset['info_url'].startswith('http://') and not asset['info_url'].startswith('https://') else asset['info_url']
+                info_url = util.normalize_content_url(asset['info_url'])
                 assert info_url in urls_data
                 if not urls_data[info_url][0]:  # request was not successful
                     inc_fetch_retry(asset, max_retry=ASSET_MAX_RETRY, errors=[urls_data[info_url][1]])
@@ -111,10 +110,7 @@ def task_compile_extended_asset_info():
             continue
 
         # may or may not end with .json. may or may not start with http:// or https://
-        asset_info_urls.append((
-            ('http://' + asset['info_url'])
-            if not asset['info_url'].startswith('http://') and not asset['info_url'].startswith('https://')
-            else asset['info_url']))
+        asset_info_urls.append(util.normalize_content_url(asset['info_url']))
 
     asset_info_urls_str = ', '.join(asset_info_urls)
     asset_info_urls_str = (
@@ -525,6 +521,9 @@ def parse_issuance(msg, msg_data):
                 }}, upsert=True)
             #^ valid info_status settings: needfetch, valid, invalid, error
             # additional fields will be added later in events, once the asset info is pulled
+
+            if description.startswith('ipfs://'):
+                ipfs.watch_asset_info(description)
         else:
             config.mongo_db.asset_extended_info.remove({'asset': asset})
             # remove any saved asset image data
