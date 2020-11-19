@@ -3,7 +3,7 @@
 ##
 # CONSTANTS
 ##
-VERSION = "1.4.0+mona006"  # should keep up with counterblockd repo's release tag
+VERSION = "1.4.0+mona007"  # should keep up with counterblockd repo's release tag
 
 DB_VERSION = 24  # a db version increment will cause counterblockd to rebuild its database off of counterpartyd
 
