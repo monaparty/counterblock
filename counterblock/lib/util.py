@@ -19,6 +19,8 @@ import gevent
 import gevent.pool
 import gevent.ssl
 import grequests
+import ipfshttpclient
+from ipfshttpclient.exceptions import DecodingError
 import pymongo
 import lxml.html
 from PIL import Image
@@ -28,6 +30,7 @@ import rfc3987
 import aniso8601  # not needed here but to ensure that installed
 
 from counterblock.lib import config, cache
+from counterblock.lib.modules import ipfs
 
 JSONRPC_API_REQUEST_TIMEOUT = 100  # in seconds
 JSONRPC_CACHE_PERIOD = 3600 # 1 hour
@@ -51,6 +54,9 @@ def http_basic_auth_str(username, password):
 def is_valid_url(url, suffix='', allow_localhost=False, allow_no_protocol=False):
     if url is None:
         return False
+
+    if url.startswith('ipfs://'): # TODO: should be more strict.
+        return True
 
     regex = re.compile(
         r'^https?://' if not allow_no_protocol else r'^(https?://)?'  # http:// or https://
@@ -265,33 +271,64 @@ def stream_fetch(urls, completed_callback, urls_group_size=50, urls_group_time_s
     completed_urls = {}
 
     def make_stream_request(url):
-        try:
-            r = grequests.map((grequests.get(url, timeout=fetch_timeout, headers={'Connection': 'close'}, verify=False, stream=True),))[0]
-            if r is None:
-                raise Exception("result is None")
-        except Exception as e:
-            data = (False, "Got exception: %s" % e)
-        else:
-            if r.status_code != 200:
-                data = (False, "Got non-successful response code of: %s" % r.status_code)
+
+        def make_stream_request_web(url):
+            data = None
+            try:
+                r = grequests.map((grequests.get(url, timeout=fetch_timeout, headers={'Connection': 'close'}, verify=False, stream=True),))[0]
+                if r is None:
+                    raise Exception("result is None")
+            except Exception as e:
+                data = (False, "Got exception: %s" % e)
             else:
+                if r.status_code != 200:
+                    data = (False, "Got non-successful response code of: %s" % r.status_code)
+                else:
+                    try:
+                        # read up to max_fetch_size
+                        raw_data = next(r.iter_content(chunk_size=max_fetch_size))
+                        if is_json:  # try to convert to JSON
+                            try:
+                                data = json.loads(raw_data.decode('utf-8'))
+                            except Exception as e:
+                                data = (False, "Invalid JSON data: %s" % e)
+                            else:
+                                data = (True, data)
+                        else:  # keep raw
+                            data = (True, raw_data)
+                    except Exception as e:
+                        data = (False, "Request error: %s" % e)
+            finally:
+                if r:
+                    r.close()
+            assert data
+            return data
+
+        def make_stream_request_ipfs(url):
+            data = None
+            with ipfshttpclient.connect(config.IPFS_API_MULTIADDR) as ipfs:
                 try:
-                    # read up to max_fetch_size
-                    raw_data = next(r.iter_content(chunk_size=max_fetch_size))
-                    if is_json:  # try to convert to JSON
-                        try:
-                            data = json.loads(raw_data.decode('utf-8'))
-                        except Exception as e:
-                            data = (False, "Invalid JSON data: %s" % e)
-                        else:
-                            data = (True, data)
-                    else:  # keep raw
-                        data = (True, raw_data)
+                    path = url.replace('ipfs://', '', 1)
+                    if (is_json):
+                        data = ipfs.get_json(path)
+                    else:
+                        data = ipfs.get(path)
+                except DecodingError as e:
+                    ipfs.invalidate_hash_json(url)
+                    data = (False, "Invalidate hash by error: %s" % e)
                 except Exception as e:
                     data = (False, "Request error: %s" % e)
-        finally:
-            if r:
-                r.close()
+                else:
+                    data = (True, data)
+            assert data
+            return data
+
+        if url.startswith('http://') or url.startswith('https://'):
+            data = make_stream_request_web(url)
+        elif url.startswith('ipfs://'):
+            data = make_stream_request_ipfs(url)
+        else:
+            raise Exception('Invalid URL')
 
         if per_request_complete_callback:
             per_request_complete_callback(url, data)
@@ -310,7 +347,7 @@ def stream_fetch(urls, completed_callback, urls_group_size=50, urls_group_time_s
                     return completed_callback(completed_urls)
                 else:
                     continue
-            assert url.startswith('http://') or url.startswith('https://')
+            assert url.startswith('http://') or url.startswith('https://') or url.startswith('ipfs://')
             pool.spawn(make_stream_request, url)
         pool.join()
 
@@ -330,20 +367,23 @@ def stream_fetch(urls, completed_callback, urls_group_size=50, urls_group_time_s
 
 
 def fetch_image(url, folder, filename, max_size=20 * 1024, formats=['png'], dimensions=(48, 48), fetch_timeout=1):
+    class ImageFormatException(Exception):
+        pass
+
     def make_data_dir(subfolder):
         path = os.path.join(config.data_dir, subfolder)
         if not os.path.exists(path):
             os.makedirs(path)
         return path
 
-    try:
-        # fetch the image data
+    def fetch_image_web():
+        data = None
         try:
             r = grequests.map((grequests.get(url, timeout=fetch_timeout, headers={'Connection': 'close'}, verify=False, stream=True),))[0]
             if r is None:
                 raise Exception("result is None")
 
-            raw_image_data = r.iter_content(chunk_size=max_size)  # read up to max_size
+            return r.iter_content(chunk_size=max_size)  # read up to max_size
         except Exception as e:
             raise Exception("Got fetch_image request error: %s" % e)
         else:
@@ -352,23 +392,44 @@ def fetch_image(url, folder, filename, max_size=20 * 1024, formats=['png'], dime
         finally:
             if r:
                 r.close()
+    
+    def fetch_image_ipfs():
+        with ipfshttpclient.connect(config.IPFS_API_MULTIADDR) as ipfs:
+            try:
+                path = url.replace('ipfs://', '', 1)
+                return ipfs.get(path)
+            except Exception as e:
+                raise Exception("Got fetch_image request error: %s" % e)
+
+
+    try:
+        # fetch the image data
+        if url.startswith('http://') or url.startswith('https://'):
+            raw_image_data = fetch_image_web()
+        elif url.startswith('ipfs://'):
+            raw_image_data = fetch_image_ipfs()
+        else:
+            raise Exception("Invalid URL")
 
         # decode image data
         try:
             image = Image.open(io.StringIO(raw_image_data))
         except Exception as e:
-            raise Exception("Unable to parse image data at: %s" % url)
+            raise ImageFormatException("Unable to parse image data at: %s" % url)
         if image.format.lower() not in formats:
-            raise Exception("Image is not a PNG: %s (got %s)" % (url, image.format))
+            raise ImageFormatException("Image is not a PNG: %s (got %s)" % (url, image.format))
         if image.size != dimensions:
-            raise Exception("Image size is not 48x48: %s (got %s)" % (url, image.size))
+            raise ImageFormatException("Image size is not 48x48: %s (got %s)" % (url, image.size))
         if image.mode not in ['RGB', 'RGBA']:
-            raise Exception("Image mode is not RGB/RGBA: %s (got %s)" % (url, image.mode))
+            raise ImageFormatException("Image mode is not RGB/RGBA: %s (got %s)" % (url, image.mode))
         imagePath = make_data_dir(folder)
         imagePath = os.path.join(imagePath, filename + '.' + image.format.lower())
         image.save(imagePath)
         os.system("exiftool -q -overwrite_original -all= %s" % imagePath)  # strip all metadata, just in case
         return True
+    except ImageFormatException as e:
+        if url.startswith('ipfs://'):
+            ipfs.upsert_hash(ipfs.TYPE_IMAGE, url, ipfs.STATUS_INVALID)
     except Exception as e:
         logger.warn(e)
         return False
@@ -431,3 +492,9 @@ def subprocess_cmd(command):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
     proc_stdout = process.communicate()[0].strip()
     print(proc_stdout)
+
+def normalize_content_url(url):
+    return ('http://' + url) if (
+        not url.startswith('http://')
+        and not url.startswith('https://')
+        and not url.startswith('ipfs://')) else url

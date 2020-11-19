@@ -22,7 +22,7 @@ import jsonrpc
 import dateutil.parser
 
 from counterblock.lib import config, util, blockfeed, blockchain
-from counterblock.lib.modules import BETTING_PRIORITY_PARSE_BROADCAST
+from counterblock.lib.modules import BETTING_PRIORITY_PARSE_BROADCAST, ipfs
 from counterblock.lib.processor import MessageProcessor, MempoolMessageProcessor, BlockProcessor, StartUpProcessor, CaughtUpProcessor, RollbackProcessor, API, start_task
 
 FEED_MAX_RETRY = 3
@@ -218,6 +218,9 @@ def parse_broadcast(msg, msg_data):
         feed['last_broadcast'] = {}
         feed['errors'] = []
         save = True
+
+        if feed['info_url'].startswith('ipfs://'):
+            ipfs.watch_feed(feed['info_url'])
     elif feed is not None:
         if msg_data['locked']:
             feed['locked'] = True
@@ -259,6 +262,8 @@ def task_compile_extended_feed_info():
 
         if len(errors) > 0:
             inc_fetch_retry(feed, new_status='invalid', errors=errors)
+            if feed['info_url'].startswith('ipfs://'):
+                ipfs.invalidate_hash(feed['info_url'])
             return (False, errors)
 
         feed['info_status'] = 'valid'
@@ -290,8 +295,7 @@ def task_compile_extended_feed_info():
         for feed in feeds:
             #logger.debug("Looking at feed %s: %s" % (feed, feed['info_url']))
             if feed['info_url']:
-                info_url = ('http://' + feed['info_url']) \
-                    if not feed['info_url'].startswith('http://') and not feed['info_url'].startswith('https://') else feed['info_url']
+                info_url = util.normalize_content_url(feed['info_url'])
                 if info_url not in urls_data:
                     logger.warn("URL %s not properly fetched (not one of %i entries in urls_data), skipping..." % (info_url, len(urls_data)))
                     continue
@@ -310,10 +314,7 @@ def task_compile_extended_feed_info():
     # compose and fetch all info URLs in all feeds with them
     for feed in feeds:
         assert feed['info_url']
-        feed_info_urls.append(
-            ('http://' + feed['info_url'])
-            if not feed['info_url'].startswith('http://') and not feed['info_url'].startswith('https://')
-            else feed['info_url'])
+        feed_info_urls.append(util.normalize_content_url(feed['info_url']))
     feed_info_urls_str = ', '.join(feed_info_urls)
     feed_info_urls_str = (feed_info_urls_str[:2000] + ' ...') if len(feed_info_urls_str) > 2000 else feed_info_urls_str  # truncate if necessary
     if len(feed_info_urls):

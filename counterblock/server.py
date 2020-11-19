@@ -67,6 +67,9 @@ CONFIG_ARGS = [
     [('--blocktrail-api-key',), {'help': 'specify a valid blocktrail API key to allow for better fee estimation'}],
     [('--blocktrail-api-secret',), {'help': 'specify a valid blocktrail API secret to allow for better fee estimation'}],
 
+    [('--ipfs-api-multiaddr',), { 'help': 'the multiaddr of the IPFS API server to use for geting (and pinning) resources'}],
+    [('--ipfs-allow-pin',), { 'action': 'store_true', 'default': True, 'help': 'Allow piningn conntent to IPFS nodes'}],
+
     # COUNTERBLOCK API
     [('--rpc-host',), {'help': 'the IP of the interface to bind to for providing JSON-RPC API access (0.0.0.0 for all interfaces)'}],
     [('--rpc-port',), {'type': int, 'help': 'port on which to provide the counterblockd JSON-RPC API'}],

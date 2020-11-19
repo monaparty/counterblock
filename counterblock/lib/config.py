@@ -3,7 +3,7 @@
 ##
 # CONSTANTS
 ##
-VERSION = "1.4.0+mona006"  # should keep up with counterblockd repo's release tag
+VERSION = "1.4.0+mona007"  # should keep up with counterblockd repo's release tag
 
 DB_VERSION = 24  # a db version increment will cause counterblockd to rebuild its database off of counterpartyd
 
@@ -194,6 +194,12 @@ def init_base(args):
 
     global COUNTERPARTY_AUTH
     COUNTERPARTY_AUTH = (COUNTERPARTY_USER, COUNTERPARTY_PASSWORD) if (COUNTERPARTY_USER and COUNTERPARTY_PASSWORD) else None
+
+    global IPFS_API_MULTIADDR
+    IPFS_API_MULTIADDR = args.ipfs_api_multiaddr
+
+    global IPFS_ALLOW_PIN
+    IPFS_ALLOW_PIN = args.ipfs_allow_pin
 
     # mongodb
     global MONGODB_CONNECT
