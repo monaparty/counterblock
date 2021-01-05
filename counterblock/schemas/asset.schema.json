@@ -3,18 +3,15 @@
     "$schema": "http://json-schema.org/draft-03/schema",
     "properties":{
         "asset": {
-            "type":"string",
-            "required":true
+            "type": "string"
         },
         "description": {
-            "type":"string",
-            "required":false,
+            "type": "string",
             "maxLength": 2048
         },
         "image": {
             "type":"string",
             "format": "uri",
-            "required":false,
             "maxLength": 100
         },
         "pgpsig": {
@@ -28,6 +25,53 @@
             "format": "uri",
             "required":false,
             "maxLength": 100
+        },
+        "dnslink": {
+            "type":"string",
+            "format": "uri",
+            "required": false,
+            "maxLength": 100
+        },
+        "owner_name": {
+            "type": "string",
+            "maxLength": 100
+        },
+        "card": {
+            "type": "object",
+            "properties": {
+                "card_name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "owner_name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "imgur_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 100
+                },
+                "ipfs_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^ipfs://.*$",
+                    "maxLength": 100
+                },
+                "tag": {
+                    "type": "array",
+                    "items": "string",
+                    "minItems": 0
+                }
+            },
+            "additionalProperties": false,
+            "required": [
+                "ipfs_url"
+            ]
         }
-    }
+    },
+    "additionalProperties": false,
+    "required": [
+        "asset"
+    ]
 }
